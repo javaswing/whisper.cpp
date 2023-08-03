@@ -1,23 +1,17 @@
 {
   "name": "whisper.cpp",
+  "description": "",
   "version": "1.0.0",
-  "description": "![whisper.cpp](https://user-images.githubusercontent.com/1991296/235238348-05d0f6a4-da44-4900-a1de-d0707e75b763.jpeg)",
-  "main": "index.js",
-  "directories": {
-    "example": "examples",
-    "test": "tests"
-  },
+  "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "cmake-js compile -T whisper-addon -B Release"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/javaswing/whisper.cpp.git"
+  "cmake-js": {
+    "runtime": "electron",
+    "runtimeVersion": "25.0.1",
+    "arch": "x64"
   },
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/javaswing/whisper.cpp/issues"
-  },
-  "homepage": "https://github.com/javaswing/whisper.cpp#readme"
+  "dependencies": {
+    "cmake-js": "^7.2.1"
+  }
 }
