@@ -86,6 +86,15 @@ int timestamp_to_sample(int64_t t, int n_samples) {
     return std::max(0, std::min((int) n_samples - 1, (int) ((t*WHISPER_SAMPLE_RATE)/100)));
 }
 
+void whisper_print_progress_callback(struct whisper_context * ctx, struct whisper_state * state, int progress, void * user_data) {
+    const auto & params  = *((whisper_print_user_data *) user_data)->params;    
+
+     if(params.progress_callback != nullptr) {
+         params.progress_callback(progress);
+     }
+
+}
+
 void whisper_print_segment_callback(struct whisper_context * ctx, struct whisper_state * state, int n_new, void * user_data) {
     const auto & params  = *((whisper_print_user_data *) user_data)->params;
     const auto & pcmf32s = *((whisper_print_user_data *) user_data)->pcmf32s;
@@ -257,44 +266,17 @@ int run(whisper_params &params, std::vector<std::vector<std::string>> &result) {
                 wparams.new_segment_callback           = whisper_print_segment_callback;
                 wparams.new_segment_callback_user_data = &user_data;
             }
+        
 
-            // Define a lambda function for real-time progress callback
-            // auto progress_callback = [&](int progress) {
-            //     if (params.progress_callback) {
-            //     params.progress_callback(progress);
-            //     }
-            // };
-
-            if(params.progress_callback) {
+            if(params.progress_callback != nullptr) {
                 // progress
-                wparams.progress_callback = [](struct whisper_context * ctx, struct whisper_state * state, int progress, void * user_data) {                
-                    params.progress_callback(progress);
-                    return;                 
-                };
+                wparams.progress_callback =  whisper_print_progress_callback;
+                wparams.progress_callback_user_data = &user_data;
             }
             
             wparams.encoder_begin_callback = [](struct whisper_context * ctx, struct whisper_state * state, void * user_data) {                
-                    return whisper_is_aborted();
-            };
-
-
-            
-
-            // // segment
-            // wparams.new_segment_callback = [](struct whisper_context * ctx, struct whisper_state * state, int n_new, void * user_data);
-            //     params.segment_callback(n_new)
-            // }
-
-            // example for abort mechanism
-            // in this example, we do not abort the processing, but we could if the flag is set to true
-            // the callback is called before every encoder run - if it returns false, the processing is aborted
-            {
-                // static bool is_aborted = false; // NOTE: this should be atomic to avoid data race
-                // wparams.encoder_begin_callback = [](struct whisper_context * /*ctx*/, struct whisper_state * /*state*/, void * user_data) {                
-                //     return whisper_abort();
-                // };
-                // wparams.encoder_begin_callback_user_data = &is_aborted;
-            }
+                return !whisper_is_aborted();
+            };                       
 
             if (whisper_full_parallel(ctx, wparams, pcmf32.data(), pcmf32.size(), params.n_processors) != 0) {
                 fprintf(stderr, "failed to process audio\n");
@@ -362,23 +344,20 @@ Napi::Value whisper(const Napi::CallbackInfo& info) {
   std::string model = whisper_params.Get("model").As<Napi::String>();
   std::string input = whisper_params.Get("fname_inp").As<Napi::String>();
 
+    // if (whisper_params.Has("progressCallback") && whisper_params.Get("progressCallback").IsFunction()) {
+    //     Napi::Function progressCallback = whisper_params.Get("progressCallback").As<Napi::Function>();
+    //     params.progress_callback = [progressCallback](int progress) {
+    //         // Convert the progress to a JavaScript number and call the callback
+    //         progressCallback.Call({ Napi::Number::New(progressCallback.Env(), progress) });
+    //     };
+    // }
+
 
   params.language = language;
   params.model = model;
   params.fname_inp.emplace_back(input);
 
-  if (info[1].IsFunction()) {
-        Napi::Function progressCallback = info[1].As<Napi::Function>();
-        params.progress_callback = [progressCallback](int progress) {
-            // Convert the progress to a JavaScript number and call the callback
-            progressCallback.Call({ Napi::Number::New(progressCallback.Env(), progress) });
-        };
-    }
-
-//   params.progress_callback = whisper_params.Get("progressCallback");
-//   params.segment_callback = info[1].As<Napi::Function>();
-
-  Napi::Function callback = info[2].As<Napi::Function>();
+  Napi::Function callback = info[1].As<Napi::Function>();
   Worker* worker = new Worker(callback, params);
   worker->Queue();
   return env.Undefined();
